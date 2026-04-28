@@ -1,0 +1,90 @@
+version: 2
+
+models:
+  - name: products
+    description: >
+      Product dimension table. One row per product SKU.
+      Contains product name, type, price, and food/drink classification.
+
+    semantic_model:
+      enabled: true
+
+    columns:
+      - name: product_id
+        description: Primary key — unique product SKU.
+        data_tests:
+          - not_null
+          - unique
+        entity:
+          type: primary
+          name: product
+
+      - name: product_name
+        description: Display name of the product.
+        data_tests:
+          - not_null
+        dimension:
+          type: categorical
+
+      - name: product_type
+        description: Product category type (e.g. jaffle, beverage).
+        dimension:
+          type: categorical
+
+      - name: product_description
+        description: Long-form product description.
+        dimension:
+          type: categorical
+
+      - name: is_food_item
+        description: True if the product is a food item.
+        data_tests:
+          - not_null
+        dimension:
+          type: categorical
+
+      - name: is_drink_item
+        description: True if the product is a drink item.
+        data_tests:
+          - not_null
+        dimension:
+          type: categorical
+
+      - name: product_price
+        description: Retail price of the product in USD.
+        data_tests:
+          - not_null
+          - is_positive
+        dimension:
+          type: categorical
+
+    metrics:
+      - name: product_count
+        label: Product Count
+        description: Total number of distinct products.
+        type: simple
+        agg: count_distinct
+        expr: product_id
+
+      - name: food_product_count
+        label: Food Product Count
+        description: Number of products classified as food items.
+        type: simple
+        agg: count_distinct
+        expr: product_id
+        filter: "{{ Dimension('product__is_food_item') }} = true"
+
+      - name: drink_product_count
+        label: Drink Product Count
+        description: Number of products classified as drink items.
+        type: simple
+        agg: count_distinct
+        expr: product_id
+        filter: "{{ Dimension('product__is_drink_item') }} = true"
+
+      - name: avg_product_price
+        label: Average Product Price
+        description: Average retail price across all products.
+        type: simple
+        agg: average
+        expr: product_price

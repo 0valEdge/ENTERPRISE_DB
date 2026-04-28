@@ -1,0 +1,150 @@
+version: 2
+
+models:
+  - name: order_items
+    description: >
+      Order items fact table. One row per order item. Enriched with product
+      price, supply cost, food/drink flags, and ordered_at timestamp.
+
+    semantic_model:
+      enabled: true
+
+    agg_time_dimension: ordered_at
+
+    columns:
+      - name: order_item_id
+        description: Primary key — unique identifier per order item.
+        data_tests:
+          - not_null
+          - unique
+        entity:
+          type: primary
+          name: order_item
+
+      - name: order_id
+        description: Foreign key to the parent order.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('orders')
+                field: order_id
+        entity:
+          type: foreign
+          name: order
+
+      - name: product_id
+        description: Foreign key to the product SKU.
+        entity:
+          type: foreign
+          name: product
+
+      - name: ordered_at
+        description: Date the order containing this item was placed.
+        data_tests:
+          - not_null
+        granularity: day
+        dimension:
+          type: time
+
+      - name: is_food_item
+        description: True if this item is a food product.
+        dimension:
+          type: categorical
+
+      - name: is_drink_item
+        description: True if this item is a drink product.
+        dimension:
+          type: categorical
+
+      - name: product_name
+        description: Name of the product ordered.
+        dimension:
+          type: categorical
+
+      - name: product_price
+        description: Price of the product at time of order (USD).
+        data_tests:
+          - not_null
+          - is_positive
+
+      - name: supply_cost
+        description: Total supply cost for this product (USD).
+
+    metrics:
+      - name: revenue
+        label: Revenue
+        description: Sum of product prices across all order items.
+        type: simple
+        agg: sum
+        expr: product_price
+
+      - name: food_revenue
+        label: Food Revenue
+        description: Revenue from food items only.
+        type: simple
+        agg: sum
+        expr: "case when is_food_item then product_price else 0 end"
+
+      - name: drink_revenue
+        label: Drink Revenue
+        description: Revenue from drink items only.
+        type: simple
+        agg: sum
+        expr: "case when is_drink_item then product_price else 0 end"
+
+      - name: item_supply_cost
+        label: Item Supply Cost
+        description: Sum of supply costs across all order items.
+        type: simple
+        agg: sum
+        expr: supply_cost
+
+      - name: median_revenue
+        label: Median Revenue
+        description: Median product price across all order items.
+        type: simple
+        agg: median
+        expr: product_price
+
+unit_tests:
+  - name: test_supply_costs_sum_correctly
+    model: order_items
+    given:
+      - input: ref('stg_supplies')
+        rows:
+          - { product_id: 1, supply_cost: 4.50 }
+          - { product_id: 2, supply_cost: 3.50 }
+          - { product_id: 2, supply_cost: 5.00 }
+      - input: ref('stg_products')
+        rows:
+          - { product_id: 1 }
+          - { product_id: 2 }
+      - input: ref('stg_order_items')
+        rows:
+          - { order_id: 1, product_id: 1 }
+          - { order_id: 2, product_id: 2 }
+          - { order_id: 2, product_id: 2 }
+      - input: ref('stg_orders')
+        rows:
+          - { order_id: 1 }
+          - { order_id: 2 }
+    expect:
+      rows:
+        - { order_id: 1, product_id: 1, supply_cost: 4.50 }
+        - { order_id: 2, product_id: 2, supply_cost: 8.50 }
+        - { order_id: 2, product_id: 2, supply_cost: 8.50 }
+
+saved_queries:
+  - name: revenue_metrics
+    query_params:
+      metrics:
+        - revenue
+        - food_revenue
+        - drink_revenue
+      group_by:
+        - TimeDimension('metric_time', 'day')
+    exports:
+      - name: revenue_metrics
+        config:
+          export_as: table

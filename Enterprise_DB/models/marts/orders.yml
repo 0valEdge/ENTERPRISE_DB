@@ -1,0 +1,215 @@
+version: 2
+
+models:
+  - name: orders
+    description: >
+      Order fact table. One row per order. Includes food/drink flags,
+      order cost, subtotal, and customer order sequencing.
+    
+    # ── New Fusion spec ──────────────────────────────────────────
+    semantic_model:
+      enabled: true
+
+    agg_time_dimension: ordered_at   # default time dim for all metrics
+
+    # ── Model-level data tests ───────────────────────────────────
+    data_tests:
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "order_items_subtotal = subtotal"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "order_total = subtotal + tax_paid"
+
+    columns:
+      # ── Primary key ───────────────────────────────────────────
+      - name: order_id
+        description: Primary key — unique identifier per order.
+        data_tests:
+          - not_null
+          - unique
+        entity:
+          type: primary
+          name: order
+
+      # ── Foreign keys ─────────────────────────────────────────
+      - name: customer_id
+        description: Foreign key to the customer who placed the order.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_customers')
+                field: customer_id
+        entity:
+          type: foreign
+          name: customer
+
+      - name: location_id
+        description: Foreign key to the store location.
+        entity:
+          type: foreign
+          name: location
+
+      # ── Time dimension ────────────────────────────────────────
+      - name: ordered_at
+        description: Timestamp (truncated to day) when the order was placed.
+        data_tests:
+          - not_null
+          - no_future_dates
+        granularity: day
+        dimension:
+          type: time
+
+      # ── Categorical dimensions ────────────────────────────────
+      - name: customer_order_number
+        description: Sequential order number per customer (1 = first order ever).
+        dimension:
+          type: categorical
+
+      - name: is_food_order
+        description: True if the order contained at least one food item.
+        dimension:
+          type: categorical
+
+      - name: is_drink_order
+        description: True if the order contained at least one drink item.
+        dimension:
+          type: categorical
+
+      # ── Measures (plain columns, no semantic annotation) ──────
+      - name: order_total
+        description: Total order amount including tax (USD).
+        data_tests:
+          - not_null
+          - is_positive
+
+      - name: subtotal
+        description: Order subtotal before tax (USD).
+        data_tests:
+          - not_null
+
+      - name: tax_paid
+        description: Tax portion of the order (USD).
+        data_tests:
+          - not_null
+
+      - name: order_cost
+        description: Sum of supply costs for items in the order.
+
+      - name: order_items_subtotal
+        description: Sum of product prices across all items in the order.
+
+      - name: count_food_items
+        description: Number of food items in the order.
+
+      - name: count_drink_items
+        description: Number of drink items in the order.
+
+      - name: count_order_items
+        description: Total number of items in the order.
+
+    # ── Simple metrics (live inside the model, replace measures) ─
+    metrics:
+      - name: orders
+        label: Orders
+        description: Total count of orders.
+        type: simple
+        agg: count
+        expr: order_id
+
+      - name: order_total
+        label: Order Total
+        description: Sum of total order amounts including tax.
+        type: simple
+        agg: sum
+        expr: order_total
+
+      - name: subtotal
+        label: Subtotal
+        description: Sum of order subtotals before tax.
+        type: simple
+        agg: sum
+        expr: subtotal
+
+      - name: tax_paid
+        label: Tax Paid
+        description: Sum of tax paid across all orders.
+        type: simple
+        agg: sum
+        expr: tax_paid
+
+      - name: order_cost
+        label: Order Cost
+        description: Sum of supply costs across all orders.
+        type: simple
+        agg: sum
+        expr: order_cost
+
+      - name: new_customer_orders
+        label: New Customer Orders
+        description: Count of orders that are a customer's first ever order.
+        type: simple
+        agg: count
+        expr: order_id
+        filter: "{{ Dimension('order__customer_order_number') }} = 1"
+
+      - name: food_orders
+        label: Food Orders
+        description: Count of orders containing at least one food item.
+        type: simple
+        agg: count
+        expr: order_id
+        filter: "{{ Dimension('order__is_food_order') }} = true"
+
+      - name: drink_orders
+        label: Drink Orders
+        description: Count of orders containing at least one drink item.
+        type: simple
+        agg: count
+        expr: order_id
+        filter: "{{ Dimension('order__is_drink_order') }} = true"
+
+      - name: large_orders
+        label: Large Orders
+        description: Count of orders with order_total >= 20.
+        type: simple
+        agg: count
+        expr: order_id
+        filter: "{{ Dimension('order__order_total') }} >= 20"
+
+# ── Unit tests ───────────────────────────────────────────────────
+unit_tests:
+  - name: test_order_items_compute_to_bools_correctly
+    description: "Test that food/drink counts convert to boolean flags correctly."
+    model: orders
+    given:
+      - input: ref('order_items')
+        rows:
+          - { order_id: 1, order_item_id: 1, is_drink_item: false, is_food_item: true }
+          - { order_id: 1, order_item_id: 2, is_drink_item: true,  is_food_item: false }
+          - { order_id: 2, order_item_id: 3, is_drink_item: false, is_food_item: true }
+      - input: ref('stg_orders')
+        rows:
+          - { order_id: 1 }
+          - { order_id: 2 }
+    expect:
+      rows:
+        - { order_id: 1, count_food_items: 1, count_drink_items: 1, is_drink_order: true,  is_food_order: true }
+        - { order_id: 2, count_food_items: 1, count_drink_items: 0, is_drink_order: false, is_food_order: true }
+
+# ── Saved queries ────────────────────────────────────────────────
+saved_queries:
+  - name: order_metrics
+    query_params:
+      metrics:
+        - orders
+        - new_customer_orders
+        - order_total
+        - food_orders
+        - drink_orders
+      group_by:
+        - TimeDimension('metric_time', 'day')
+    exports:
+      - name: order_metrics
+        config:
+          export_as: table
