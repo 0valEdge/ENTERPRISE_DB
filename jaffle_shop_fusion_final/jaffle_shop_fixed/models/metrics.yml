@@ -1,0 +1,159 @@
+version: 2
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TOP-LEVEL METRICS
+# Per the new dbt Fusion spec, this file contains ONLY:
+#   - derived metrics  (expr: combining simple metrics)
+#   - ratio metrics    (numerator / denominator)
+#   - cumulative metrics
+#   - conversion metrics
+#   - any metric that references dimensions/metrics from a DIFFERENT model
+#
+# Simple metrics live inside each model's `metrics:` block in its .yml file.
+# type_params is DEPRECATED — all params are top-level keys.
+# ─────────────────────────────────────────────────────────────────────────────
+
+metrics:
+
+  # ── Derived: Customer ────────────────────────────────────────────────────
+  - name: average_order_value
+    label: Average Order Value
+    description: >
+      Customer lifetime pre-tax spend divided by total lifetime orders.
+      Derived from the customers model.
+    type: derived
+    expr: lifetime_spend_pretax / count_lifetime_orders
+    input_metrics:
+      - name: lifetime_spend_pretax
+      - name: count_lifetime_orders
+
+  - name: customer_retention_rate
+    label: Customer Retention Rate
+    description: Returning customers as a percentage of all customers.
+    type: derived
+    expr: returning_customers / customers * 100
+    input_metrics:
+      - name: returning_customers
+      - name: customers
+
+  # ── Ratio: Orders ─────────────────────────────────────────────────────────
+  - name: food_order_rate
+    label: Food Order Rate
+    description: Percentage of orders that contain food items.
+    type: ratio
+    numerator: food_orders
+    denominator: orders
+
+  - name: drink_order_rate
+    label: Drink Order Rate
+    description: Percentage of orders that contain drink items.
+    type: ratio
+    numerator: drink_orders
+    denominator: orders
+
+  - name: new_customer_order_rate
+    label: New Customer Order Rate
+    description: Percentage of orders placed by first-time customers.
+    type: ratio
+    numerator: new_customer_orders
+    denominator: orders
+
+  # ── Ratio: Revenue ────────────────────────────────────────────────────────
+  - name: gross_margin_rate
+    label: Gross Margin Rate
+    description: Gross margin as a percentage of total revenue.
+    type: ratio
+    numerator: total_product_gross_margin
+    denominator: total_product_revenue
+
+  - name: food_revenue_share
+    label: Food Revenue Share
+    description: Food revenue as a percentage of total daily gross revenue.
+    type: ratio
+    numerator: daily_food_revenue
+    denominator: daily_gross_revenue
+
+  - name: drink_revenue_share
+    label: Drink Revenue Share
+    description: Drink revenue as a percentage of total daily gross revenue.
+    type: ratio
+    numerator: daily_drink_revenue
+    denominator: daily_gross_revenue
+
+  # ── Ratio: Location ───────────────────────────────────────────────────────
+  - name: revenue_per_location_order
+    label: Revenue Per Order (Location)
+    description: Average revenue per order at the location level.
+    type: ratio
+    numerator: location_total_revenue
+    denominator: location_total_orders
+
+  - name: customers_per_location
+    label: Customers Per Location
+    description: Average number of unique customers per location.
+    type: ratio
+    numerator: location_unique_customers
+    denominator: location_count
+
+  # ── Derived: Daily revenue ────────────────────────────────────────────────
+  - name: daily_avg_order_value
+    label: Daily Average Order Value
+    description: Average revenue per order per day.
+    type: derived
+    expr: daily_gross_revenue / daily_order_count
+    input_metrics:
+      - name: daily_gross_revenue
+      - name: daily_order_count
+
+  # ── Derived: RFM ─────────────────────────────────────────────────────────
+  - name: customer_health_ratio
+    label: Customer Health Ratio
+    description: >
+      Champion customers divided by at-risk customers.
+      A higher ratio indicates a healthier customer base.
+    type: ratio
+    numerator: champion_customers
+    denominator: at_risk_customers
+
+  - name: churn_risk_rate
+    label: Churn Risk Rate
+    description: At-risk + lost customers as a share of total RFM customers.
+    type: derived
+    expr: (at_risk_customers + lost_customers) / total_rfm_customers * 100
+    input_metrics:
+      - name: at_risk_customers
+      - name: lost_customers
+      - name: total_rfm_customers
+
+  # ── Cumulative: Revenue ───────────────────────────────────────────────────
+  - name: revenue_mtd
+    label: Revenue Month-to-Date
+    description: Cumulative gross revenue within the current calendar month.
+    type: cumulative
+    input_metric: daily_gross_revenue
+    grain_to_date: month
+    period_agg: sum
+
+  - name: orders_rolling_7d
+    label: Orders Rolling 7 Days
+    description: Rolling 7-day order count.
+    type: cumulative
+    input_metric: daily_order_count
+    window: 7 days
+    period_agg: sum
+
+  # ── Derived: Product performance ─────────────────────────────────────────
+  - name: revenue_per_unit
+    label: Revenue Per Unit Sold
+    description: Total product revenue divided by total units sold.
+    type: ratio
+    numerator: total_product_revenue
+    denominator: total_units_sold
+
+  # ── Derived: Cohort ───────────────────────────────────────────────────────
+  - name: avg_cohort_order_value
+    label: Average Cohort Order Value
+    description: Average revenue per order within cohorts.
+    type: ratio
+    numerator: cohort_revenue
+    denominator: cohort_total_orders
