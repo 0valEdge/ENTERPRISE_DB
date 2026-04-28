@@ -6,6 +6,7 @@ customer_orders as (
 
 cohort_summary as (
     select
+        customer_id,
         cohort_month,
         date_trunc('month', ordered_at)                     as order_month,
 
@@ -19,11 +20,11 @@ cohort_summary as (
         avg(order_revenue)                                  as avg_order_value,
 
         -- months since cohort started (for cohort retention analysis)
-        {{ dbt_utils.datediff('cohort_month', "date_trunc('month', ordered_at)", 'month') }}
+         dbt_utils.datediff('cohort_month', "date_trunc('month', ordered_at)", 'month') 
             as months_since_cohort_start
 
     from customer_orders
-    group by 1, 2
+    group by 1, 2,3
 )
 
 select * from cohort_summary

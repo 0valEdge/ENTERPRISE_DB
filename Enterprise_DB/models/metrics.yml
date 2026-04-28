@@ -132,7 +132,7 @@ metrics:
     type: cumulative
     input_metric: daily_gross_revenue
     grain_to_date: month
-    period_agg: sum
+    period_agg: average
 
   - name: orders_rolling_7d
     label: Orders Rolling 7 Days
@@ -140,7 +140,7 @@ metrics:
     type: cumulative
     input_metric: daily_order_count
     window: 7 days
-    period_agg: sum
+    period_agg: average
 
   # ── Derived: Product performance ─────────────────────────────────────────
   - name: revenue_per_unit

@@ -19,7 +19,7 @@ rfm_raw as (
         last_ordered_at,
 
         -- days since last order (recency - lower is better)
-        {{ dbt_utils.datediff('last_ordered_at', 'current_date', 'day') }}
+         dbt_utils.datediff('day','last_ordered_at', 'current_date') 
             as days_since_last_order
 
     from customers

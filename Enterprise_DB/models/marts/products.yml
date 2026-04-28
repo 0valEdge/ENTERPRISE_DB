@@ -5,7 +5,7 @@ models:
     description: >
       Product dimension table. One row per product SKU.
       Contains product name, type, price, and food/drink classification.
-
+      
     semantic_model:
       enabled: true
 
