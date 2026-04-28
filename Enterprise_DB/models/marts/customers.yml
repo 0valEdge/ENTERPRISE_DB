@@ -1,0 +1,131 @@
+version: 2
+
+models:
+  - name: customers
+    description: >
+      Customer dimension mart. One row per customer with lifetime spend,
+      order counts, and customer type classification.
+
+    semantic_model:
+      enabled: true
+
+    agg_time_dimension: first_ordered_at
+
+    data_tests:
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "lifetime_spend_pretax + lifetime_tax_paid = lifetime_spend"
+
+    columns:
+      - name: customer_id
+        description: Primary key — unique customer identifier.
+        data_tests:
+          - not_null
+          - unique
+        entity:
+          type: primary
+          name: customer
+
+      - name: customer_name
+        description: Customer's full name.
+        dimension:
+          type: categorical
+
+      - name: customer_type
+        description: "'new' for first-time buyers, 'returning' for repeat buyers."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["new", "returning"]
+        dimension:
+          type: categorical
+
+      - name: first_ordered_at
+        description: Date of the customer's first ever order.
+        granularity: day
+        dimension:
+          type: time
+
+      - name: last_ordered_at
+        description: Date of the customer's most recent order.
+        granularity: day
+        dimension:
+          type: time
+
+      - name: count_lifetime_orders
+        description: Total number of orders the customer has placed.
+        data_tests:
+          - not_null
+
+      - name: lifetime_spend_pretax
+        description: Sum of all pre-tax subtotals across a customer's orders.
+        data_tests:
+          - not_null
+
+      - name: lifetime_tax_paid
+        description: Sum of all tax paid across a customer's orders.
+        data_tests:
+          - not_null
+
+      - name: lifetime_spend
+        description: Sum of all order totals (including tax) across a customer's orders.
+        data_tests:
+          - not_null
+
+    metrics:
+      - name: customers
+        label: Customers
+        description: Count of distinct customers.
+        type: simple
+        agg: count_distinct
+        expr: customer_id
+
+      - name: new_customers
+        label: New Customers
+        description: Count of customers who have placed exactly one order.
+        type: simple
+        agg: count_distinct
+        expr: customer_id
+        filter: "{{ Dimension('customer__customer_type') }} = 'new'"
+
+      - name: returning_customers
+        label: Returning Customers
+        description: Count of customers who have placed more than one order.
+        type: simple
+        agg: count_distinct
+        expr: customer_id
+        filter: "{{ Dimension('customer__customer_type') }} = 'returning'"
+
+      - name: lifetime_spend_pretax
+        label: LTV Pre-tax
+        description: Sum of lifetime pre-tax spend across all customers.
+        type: simple
+        agg: sum
+        expr: lifetime_spend_pretax
+
+      - name: lifetime_spend
+        label: Lifetime Spend
+        description: Sum of total lifetime spend (incl. tax) across all customers.
+        type: simple
+        agg: sum
+        expr: lifetime_spend
+
+      - name: count_lifetime_orders
+        label: Count Lifetime Orders
+        description: Sum of lifetime order counts across all customers.
+        type: simple
+        agg: sum
+        expr: count_lifetime_orders
+
+saved_queries:
+  - name: customer_order_metrics
+    query_params:
+      metrics:
+        - count_lifetime_orders
+        - lifetime_spend_pretax
+      group_by:
+        - Entity('customer')
+    exports:
+      - name: customer_order_metrics
+        config:
+          export_as: table

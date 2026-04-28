@@ -1,0 +1,93 @@
+version: 2
+
+models:
+  - name: customer_cohorts
+    description: >
+      Monthly cohort analysis fact table. One row per cohort per calendar month.
+      Enables retention and LTV analysis by customer acquisition cohort.
+
+    semantic_model:
+      enabled: true
+
+    agg_time_dimension: cohort_month
+
+    columns:
+      - name: cohort_month
+        description: Month in which this cohort of customers first ordered.
+        data_tests:
+          - not_null
+        granularity: month
+        dimension:
+          type: time
+
+      - name: order_month
+        description: Calendar month in which orders were placed.
+        data_tests:
+          - not_null
+        granularity: month
+        dimension:
+          type: time
+
+      - name: months_since_cohort_start
+        description: Number of months since the cohort's first order month (0 = acquisition month).
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+        dimension:
+          type: categorical
+
+      - name: active_customers
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+
+      - name: new_customers
+        data_tests:
+          - not_null
+
+      - name: total_orders
+        data_tests:
+          - not_null
+
+      - name: total_revenue
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+
+      - name: total_gross_margin
+      - name: avg_order_value
+
+    metrics:
+      - name: cohort_active_customers
+        label: Cohort Active Customers
+        description: Sum of active customers across all cohorts per period.
+        type: simple
+        agg: sum
+        expr: active_customers
+
+      - name: cohort_new_customers
+        label: Cohort New Customers
+        description: Sum of new customers (acquisition) per cohort month.
+        type: simple
+        agg: sum
+        expr: new_customers
+
+      - name: cohort_revenue
+        label: Cohort Revenue
+        description: Total revenue generated per cohort per period.
+        type: simple
+        agg: sum
+        expr: total_revenue
+
+      - name: cohort_total_orders
+        label: Cohort Total Orders
+        description: Total orders per cohort per period.
+        type: simple
+        agg: sum
+        expr: total_orders

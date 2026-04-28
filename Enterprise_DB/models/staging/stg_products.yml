@@ -1,0 +1,34 @@
+version: 2
+
+models:
+  - name: stg_products
+    description: Product data with basic cleaning. One row per product SKU.
+    columns:
+      - name: product_id
+        description: Primary key — unique product SKU.
+        data_tests:
+          - not_null
+          - unique
+      - name: product_name
+        data_tests:
+          - not_null
+      - name: product_type
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['jaffle', 'beverage']
+      - name: product_price
+        data_tests:
+          - not_null
+          - is_positive
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 100
+      - name: is_food_item
+        data_tests:
+          - not_null
+      - name: is_drink_item
+        data_tests:
+          - not_null
