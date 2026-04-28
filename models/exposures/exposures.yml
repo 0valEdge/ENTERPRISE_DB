@@ -3,6 +3,7 @@ version: 2
 exposures:
 
   - name: executive_revenue_dashboard
+    tags: ['executive','revenue']
     label: Executive Revenue Dashboard
     type: dashboard
     maturity: high
@@ -20,9 +21,6 @@ exposures:
     owner:
       name: Data Team
       email: data@jaffle.shop
-    tags:
-      - executive
-      - revenue
 
   - name: product_performance_report
     label: Product Performance Report
